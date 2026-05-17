@@ -6,6 +6,7 @@ OpenClaw **[Agent Skills](https://agentskills.io)-compatible** skill: create a d
 
 - OpenClaw with Feishu channel and `openclaw-lark` (or official Feishu plugin) enabled.
 - Default OpenClaw config at `~/.openclaw/openclaw.json`, or set `OPENCLAW_CONFIG_PATH`.
+- For a custom state directory (for example a non-default profile path), set `OPENCLAW_STATE_DIR`. New agent workspace defaults are created under that directory unless you pass `--workspace` / `--agent-dir`.
 - Node.js 18+ (for built-in `fetch` in `save-qr` remote mode).
 
 ## Install

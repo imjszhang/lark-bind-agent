@@ -4,8 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const DEFAULT_WORKSPACE_ROOT = path.join(os.homedir(), ".openclaw");
-const DEFAULT_CONFIG_PATH = path.join(DEFAULT_WORKSPACE_ROOT, "openclaw.json");
+const FALLBACK_CONFIG_PATH = path.join(os.homedir(), ".openclaw", "openclaw.json");
 const DEFAULT_ACCOUNT_ID = "main";
 const FEISHU_BIND_TOOL = "feishu_agent_bind";
 
@@ -17,7 +16,7 @@ function usage(exitCode = 0) {
   node scripts/lark-bind-agent.mjs config --dry-run|--commit --agent-id <id> --name <name> --peer-kind direct|group --peer-id <id> [options]
 
 Options:
-  --config <path>            OpenClaw config path. Default: ${DEFAULT_CONFIG_PATH} (or OPENCLAW_CONFIG_PATH)
+  --config <path>            OpenClaw config path. Default: $OPENCLAW_CONFIG_PATH or ~/.openclaw/openclaw.json
   --account-id <id>          Feishu account id for the binding. Default: ${DEFAULT_ACCOUNT_ID}
   --workspace <path>         New agent workspace. Default: ~/.openclaw/workspace-<agentId>
   --agent-dir <path>         New agent dir. Default: ~/.openclaw/agents/<agentId>/agent
@@ -125,7 +124,23 @@ function redactSecretRef(value) {
 }
 
 function getConfigPath(args) {
-  return optionalString(args.config) ?? process.env.OPENCLAW_CONFIG_PATH ?? DEFAULT_CONFIG_PATH;
+  const fromArg = optionalString(args.config);
+  if (fromArg) {
+    return path.normalize(fromArg);
+  }
+  const fromEnv = process.env.OPENCLAW_CONFIG_PATH?.trim();
+  if (fromEnv) {
+    return path.normalize(fromEnv);
+  }
+  return FALLBACK_CONFIG_PATH;
+}
+
+function resolveStateRoot(args) {
+  const fromEnv = process.env.OPENCLAW_STATE_DIR?.trim();
+  if (fromEnv) {
+    return path.normalize(fromEnv);
+  }
+  return path.dirname(getConfigPath(args));
 }
 
 function listToolsForAgent(cfg, agentId) {
@@ -244,12 +259,12 @@ async function commandSaveQr(args) {
   printJson({ ok: true, qrPath, sourceKind });
 }
 
-function defaultWorkspace(agentId) {
-  return path.join(DEFAULT_WORKSPACE_ROOT, `workspace-${agentId}`);
+function defaultWorkspace(agentId, args) {
+  return path.join(resolveStateRoot(args), `workspace-${agentId}`);
 }
 
-function defaultAgentDir(agentId) {
-  return path.join(DEFAULT_WORKSPACE_ROOT, "agents", agentId, "agent");
+function defaultAgentDir(agentId, args) {
+  return path.join(resolveStateRoot(args), "agents", agentId, "agent");
 }
 
 function buildConfigPatch(cfg, args) {
@@ -260,8 +275,8 @@ function buildConfigPatch(cfg, args) {
   validatePeerId(peerKind, peerId);
 
   const accountId = optionalString(args["account-id"]) ?? DEFAULT_ACCOUNT_ID;
-  const workspace = optionalString(args.workspace) ?? defaultWorkspace(agentId);
-  const agentDir = optionalString(args["agent-dir"]) ?? defaultAgentDir(agentId);
+  const workspace = optionalString(args.workspace) ?? defaultWorkspace(agentId, args);
+  const agentDir = optionalString(args["agent-dir"]) ?? defaultAgentDir(agentId, args);
   const existingAgents = Array.isArray(cfg.agents?.list) ? cfg.agents.list : [];
   const existingBindings = Array.isArray(cfg.bindings) ? cfg.bindings : [];
   const agentExists = existingAgents.some((agent) => agent?.id === agentId);
